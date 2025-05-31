@@ -4,7 +4,7 @@ import chromium from "@sparticuz/chromium";
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: "2mb",
+      sizeLimit: "2mb", // allow large HTML
     },
   },
 };
@@ -23,9 +23,15 @@ export default async function handler(req, res) {
   let browser;
 
   try {
+    const executablePath = await chromium.executablePath();
+
+    if (!executablePath) {
+      throw new Error("Chromium executablePath not found");
+    }
+
     browser = await puppeteer.launch({
       args: chromium.args,
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: chromium.headless,
       defaultViewport: chromium.defaultViewport,
     });
@@ -44,15 +50,16 @@ export default async function handler(req, res) {
       },
     });
 
-    await browser.close();
-
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${title}.pdf"`);
 
     return res.status(200).send(pdfBuffer);
   } catch (error) {
     console.error("PDF generation error:", error);
+    return res
+      .status(500)
+      .json({ error: "Failed to generate PDF", details: error.message });
+  } finally {
     if (browser) await browser.close();
-    return res.status(500).json({ error: "Failed to generate PDF" });
   }
 }
